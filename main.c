@@ -157,6 +157,7 @@ void main(void) {
     RELAY_LAT = 0;
     INTERRUPT_GlobalInterruptEnable();
     initVariables();
+    initADC();
     while (1) {
         statusByte0 = 0x00;
         statusByte1 = 0x00;
@@ -183,6 +184,7 @@ void main(void) {
         if (tick250mSec) {
             tick250mSec = 0;
             interruptFlagDisp = 0;
+            adcTask();
             if (interruptFlag) {
                 interruptFlag = 0;
                 interruptFlagDisp = 1;
@@ -205,7 +207,7 @@ void main(void) {
 //        }
         switch (dispMainState) {
             case 0:
-                displayInt(fps, 0);
+                displayInt(iADCValCh2, 0);
                 if (keyDown & DNKEY_MASK) {
                     outputCounter = 2;
                     outputLatch = 0;

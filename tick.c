@@ -468,7 +468,8 @@ void initLVD(void) {
 void initADC(void) {
 #if defined(__18F4520)
     ADCON0 = 0b00000000;
-    ADCON1 = 0b00011011; //ADCON1 = 0b00010000;
+    //ADCON1 = 0b00011011; 
+    ADCON1 = 0b00010000;
     ADCON2 = 0b10110101;
     //76543210
     TRISA |= 0b00001111;
