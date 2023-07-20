@@ -161,6 +161,7 @@ void main(void) {
     while (1) {
         statusByte0 = 0x00;
         statusByte1 = 0x00;
+        adcTask();
         if (tick1000mSec) {
             tick1000mSec = 0;
             if (sec60Counter == 0) {
@@ -184,7 +185,6 @@ void main(void) {
         if (tick250mSec) {
             tick250mSec = 0;
             interruptFlagDisp = 0;
-            adcTask();
             if (interruptFlag) {
                 interruptFlag = 0;
                 interruptFlagDisp = 1;
