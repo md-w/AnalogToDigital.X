@@ -66,8 +66,21 @@
 
 #define PSWD                        10
 
+#define ANALOG_FULLSCALE   1500
+
+#define M_MAX   ((char)120)
+#define M_MIN   ((char)-120)
+
+#define C_MAX   ((char)120)
+#define C_MIN   ((char)-120)
+
+#define SET_POINT_MAX  (ANALOG_FULLSCALE/10 - 1)
+#define SET_POINT_MIN  (1)
+
 typedef struct _structControllerSP {
-    unsigned char ucLowSetPoint;
+    unsigned char ucSetPoint;
+    char cMCh1;
+    char cCCh1;
 } STRUCT_CONTROLLER_SP;
 
 unsigned char dispMainState = 0;
@@ -143,8 +156,14 @@ void SYSTEM_Initialize(void) {
 
 void initVariables(void) {
     readByte((unsigned char *) &SetPoint, 0, sizeof (SetPoint));
-    if ((SetPoint.ucLowSetPoint == 0) || (SetPoint.ucLowSetPoint > 100)) {
-        SetPoint.ucLowSetPoint = 10;
+    if ((SetPoint.ucSetPoint < SET_POINT_MIN) || (SetPoint.ucSetPoint > SET_POINT_MAX)) {
+        SetPoint.ucSetPoint = 100;
+    }
+    if ((SetPoint.cMCh1 < M_MIN) || (SetPoint.cMCh1 > M_MAX)) {
+        SetPoint.cMCh1 = 0;
+    }
+    if ((SetPoint.cCCh1 < C_MIN) || (SetPoint.cCCh1 > C_MAX)) {
+        SetPoint.cCCh1 = 0;
     }
 }
 
@@ -168,13 +187,13 @@ void main(void) {
                 sec60Counter = 60;
                 fps = fpsCounter;
                 fpsCounter = 0;
-                if (fps < (SetPoint.ucLowSetPoint)) {
+                if (fps < (SetPoint.ucSetPoint)) {
                     if (outputCounter == 0) {
                         outputCounter = 2;
                         outputLatch = 1;
                     }
                     outputCounter--;
-                } else if (fps > (SetPoint.ucLowSetPoint)) {
+                } else if (fps > (SetPoint.ucSetPoint)) {
                     outputCounter = 2;
                     outputLatch = 0;
                 }
@@ -205,14 +224,14 @@ void main(void) {
 //        } else {
 //            
 //        }
+        int iRoomTemp = ((long)iADCValCh1*(long)ANALOG_FULLSCALE)/(long)10230;
         switch (dispMainState) {
             case 0:
-                displayInt(iADCValCh2, 0);
+                displayInt(iRoomTemp, 0);
                 if (keyDown & DNKEY_MASK) {
-                    outputCounter = 2;
-                    outputLatch = 0;
                     keyDown = 0x00;
-                    keyHold = 0x00;                    
+                    keyHold = 0x00;
+                    outputLatch = 0;
                 }
                 if (keyDown & PROKEY_MASK) {
                     keyDown = 0x00;
@@ -228,7 +247,48 @@ void main(void) {
                 if (keyDown & PROKEY_MASK) {
                     keyDown = 0x00;
                     keyHold = 0x00;
-                    dispMainState = 0;
+                    dispMainState += 2;
+                }
+                if (keyDown & ENTKEY_MASK) {
+                    keyDown = 0x00;
+                    keyHold = 0x00;
+                    dispMainState++;
+                    dispSubState = 0;
+                }
+                break;
+            case 2: //PRO
+                statusByte0 |= 0x01;
+                switch (dispSubState) {
+                    case 0:
+                        checkAndInrDcrChar(&SetPoint.ucSetPoint, SET_POINT_MAX, SET_POINT_MIN);
+                        displayInt(SetPoint.ucSetPoint, 0);
+                        if ((keyDown & ENTKEY_MASK)) {
+                            keyDown = 0x00;
+                            keyHold = 0x00;
+                            dispSubState++;
+                        }
+                        break;
+                    default:
+                        dispSubState = 0;
+                        break;
+                }
+                if ((keyDown & PROKEY_MASK)) {
+                    keyDown = 0x00;
+                    keyHold = 0x00;
+                    dispMainState++;
+                    dispSubState = 0;
+                    writeByte((unsigned char *) &SetPoint, 0, sizeof (SetPoint));
+                }
+                break;
+            case 3: //enter CAL
+                statusByte0 |= 0x02;
+                digitAssign(SEG_C, 2);
+                digitAssign(SEG_A, 1);
+                digitAssign(SEG_L, 0);
+                if (keyDown & PROKEY_MASK) {
+                    keyDown = 0x00;
+                    keyHold = 0x00;
+                    dispMainState += 2;
                 }
                 if (keyDown & ENTKEY_MASK) {
                     keyDown = 0x00;
@@ -238,14 +298,39 @@ void main(void) {
                     selectedIndx = 0;
                 }
                 break;
-            case 2: //PRO
-                statusByte0 |= 0x01;
-                checkAndInrDcrChar(&SetPoint.ucLowSetPoint, 60, 0);
-                displayInt(SetPoint.ucLowSetPoint, 0);
-                if ((keyDown & PROKEY_MASK) || (keyDown & ENTKEY_MASK)) {
+            case 4: //CAL
+                statusByte0 |= 0x02;
+                switch (dispSubState) {
+                    case 0:
+                        statusByte0 |= 0x04;
+                        checkAndInrDcrSignedChar(&SetPoint.cMCh1, M_MAX, M_MIN);
+                        displayInt(SetPoint.cMCh1, 0);
+                        if ((keyDown & ENTKEY_MASK)) {
+                            keyDown = 0x00;
+                            keyHold = 0x00;
+                            dispSubState++;
+                        }
+                        break;
+                    case 1:
+                        statusByte0 |= 0x08;
+                        checkAndInrDcrSignedChar(&SetPoint.cCCh1, C_MAX, C_MIN);
+                        displayInt(SetPoint.cCCh1, 0);
+                        if ((keyDown & ENTKEY_MASK)) {
+                            keyDown = 0x00;
+                            keyHold = 0x00;
+                            dispSubState++;
+                        }
+                        break;
+                    default:
+                        dispSubState = 0;
+                        break;
+                        
+                }
+                if ((keyDown & PROKEY_MASK)) {
                     keyDown = 0x00;
                     keyHold = 0x00;
-                    dispMainState = 0;
+                    dispMainState++;
+                    dispSubState = 0;
                     writeByte((unsigned char *) &SetPoint, 0, sizeof (SetPoint));
                 }
                 break;
@@ -253,11 +338,11 @@ void main(void) {
                 dispMainState = 0;
                 break;
         }
-        if (statusByte0 & 0x01) {
-            LED_LAT_1 = 0;
-        } else {
-            LED_LAT_1 = 1;
-        }
+//        if (statusByte0 & 0x01) {
+//            LED_LAT_1 = 0;
+//        } else {
+//            LED_LAT_1 = 1;
+//        }
         if (statusByte1 & 0x01) {
             LED_LAT_2 = 0;
         } else {
@@ -268,6 +353,7 @@ void main(void) {
         } else {
             LED_LAT_3 = 1;
         }
+        statusByte0 |= statusByte0 << 4;
         directAssign(statusByte0, 3);
         display();
         ClrWdt();
