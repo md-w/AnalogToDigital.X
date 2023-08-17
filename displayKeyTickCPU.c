@@ -342,7 +342,7 @@ void displaySignedInt(int hexData, unsigned char dotPosition) {
     } while (i <= 5);
 
     if (isNegative)
-        digitAssign(SEG_MINUS, i + 1); // digitAssign(temp,i);
+        digitAssign(SEG_MINUS, i); // digitAssign(SEG_MINUS, i + 1);
 
     if (dotPosition < MODULE_SIZE)
         directOrWithDisplay(0x80, dotPosition); // directOrWithDisplay(0x80,dotPosition);

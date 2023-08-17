@@ -74,11 +74,15 @@
 #define C_MAX   ((char)120)
 #define C_MIN   ((char)-120)
 
-#define SET_POINT_MAX  (ANALOG_FULLSCALE/10 - 1)
-#define SET_POINT_MIN  (1)
+#define SET_POINT_HI_MAX  (ANALOG_FULLSCALE/10 - 1)
+#define SET_POINT_HI_MIN  (1)
+
+#define SET_POINT_LO_MAX  (ANALOG_FULLSCALE/10 - 1)
+#define SET_POINT_LO_MIN  (1)
 
 typedef struct _structControllerSP {
-    unsigned char ucSetPoint;
+    unsigned char ucLoSetPoint;
+    unsigned char ucHiSetPoint;
     char cMCh1;
     char cCCh1;
 } STRUCT_CONTROLLER_SP;
@@ -156,8 +160,11 @@ void SYSTEM_Initialize(void) {
 
 void initVariables(void) {
     readByte((unsigned char *) &SetPoint, 0, sizeof (SetPoint));
-    if ((SetPoint.ucSetPoint < SET_POINT_MIN) || (SetPoint.ucSetPoint > SET_POINT_MAX)) {
-        SetPoint.ucSetPoint = 100;
+    if ((SetPoint.ucHiSetPoint < SET_POINT_HI_MIN) || (SetPoint.ucHiSetPoint > SET_POINT_HI_MAX)) {
+        SetPoint.ucHiSetPoint = 100;
+    }
+    if ((SetPoint.ucLoSetPoint < SET_POINT_HI_MIN) || (SetPoint.ucLoSetPoint > SET_POINT_HI_MAX)) {
+        SetPoint.ucLoSetPoint = 10;
     }
     if ((SetPoint.cMCh1 < M_MIN) || (SetPoint.cMCh1 > M_MAX)) {
         SetPoint.cMCh1 = 0;
@@ -183,23 +190,6 @@ void main(void) {
         adcTask();
         if (tick1000mSec) {
             tick1000mSec = 0;
-            if (sec60Counter == 0) {
-                sec60Counter = 60;
-                fps = fpsCounter;
-                fpsCounter = 0;
-                if (fps < (SetPoint.ucSetPoint)) {
-                    if (outputCounter == 0) {
-                        outputCounter = 2;
-                        outputLatch = 1;
-                    }
-                    outputCounter--;
-                } else if (fps > (SetPoint.ucSetPoint)) {
-                    outputCounter = 2;
-                    outputLatch = 0;
-                }
-
-            }
-            sec60Counter--;
         }
         if (tick250mSec) {
             tick250mSec = 0;
@@ -224,7 +214,8 @@ void main(void) {
 //        } else {
 //            
 //        }
-        int iRoomTemp = ((long)iADCValCh1*(long)ANALOG_FULLSCALE)/(long)10230;
+        int iRoomTemp = (((long)iADCValCh1 + (long)SetPoint.cCCh1)*((long)ANALOG_FULLSCALE+(long)SetPoint.cMCh1))/(long)10230;
+        //        int iRoomTemp = ((long)iADCValCh1*(long)ANALOG_FULLSCALE)/(long)10230;
         switch (dispMainState) {
             case 0:
                 displayInt(iRoomTemp, 0);
@@ -260,8 +251,19 @@ void main(void) {
                 statusByte0 |= 0x01;
                 switch (dispSubState) {
                     case 0:
-                        checkAndInrDcrChar(&SetPoint.ucSetPoint, SET_POINT_MAX, SET_POINT_MIN);
-                        displayInt(SetPoint.ucSetPoint, 0);
+                        statusByte0 |= 0x04;
+                        checkAndInrDcrChar(&SetPoint.ucHiSetPoint, SET_POINT_HI_MAX, SET_POINT_HI_MIN);
+                        displayInt(SetPoint.ucHiSetPoint, 0);
+                        if ((keyDown & ENTKEY_MASK)) {
+                            keyDown = 0x00;
+                            keyHold = 0x00;
+                            dispSubState++;
+                        }
+                        break;
+                    case 1:
+                        statusByte0 |= 0x08;
+                        checkAndInrDcrChar(&SetPoint.ucLoSetPoint, SetPoint.ucHiSetPoint, SET_POINT_LO_MIN);
+                        displayInt(SetPoint.ucLoSetPoint, 0);
                         if ((keyDown & ENTKEY_MASK)) {
                             keyDown = 0x00;
                             keyHold = 0x00;
@@ -304,7 +306,7 @@ void main(void) {
                     case 0:
                         statusByte0 |= 0x04;
                         checkAndInrDcrSignedChar(&SetPoint.cMCh1, M_MAX, M_MIN);
-                        displayInt(SetPoint.cMCh1, 0);
+                        displaySignedInt(SetPoint.cMCh1, 0);
                         if ((keyDown & ENTKEY_MASK)) {
                             keyDown = 0x00;
                             keyHold = 0x00;
@@ -314,7 +316,7 @@ void main(void) {
                     case 1:
                         statusByte0 |= 0x08;
                         checkAndInrDcrSignedChar(&SetPoint.cCCh1, C_MAX, C_MIN);
-                        displayInt(SetPoint.cCCh1, 0);
+                        displaySignedInt(SetPoint.cCCh1, 0);
                         if ((keyDown & ENTKEY_MASK)) {
                             keyDown = 0x00;
                             keyHold = 0x00;
