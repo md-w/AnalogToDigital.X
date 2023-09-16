@@ -75,16 +75,16 @@
 #define C_MIN   ((char)-120)
 
 #define SET_POINT_HI_MAX  (ANALOG_FULLSCALE/10 - 1)
-#define SET_POINT_HI_MIN  (1)
+#define SET_POINT_HI_MIN  (60)
 
-#define SET_POINT_LO_MAX  (ANALOG_FULLSCALE/10 - 1)
-#define SET_POINT_LO_MIN  (1)
+#define SET_POINT_LO_MAX  (50)
+#define SET_POINT_LO_MIN  (30)
 
 typedef struct _structControllerSP {
     unsigned char ucLoSetPoint;
     unsigned char ucHiSetPoint;
-    char cMCh1;
-    char cCCh1;
+    signed char cMCh1;
+    signed char cCCh1;
 } STRUCT_CONTROLLER_SP;
 
 unsigned char dispMainState = 0;
@@ -92,25 +92,23 @@ unsigned char dispSubState = 0;
 unsigned char statusByte0 = 0;
 unsigned char statusByte1 = 0;
 unsigned char sec60Counter = 60;
-unsigned int fpsCounter = 0;
-unsigned int outputCounter = 2;
-unsigned int fps = 0;
 unsigned char ucPassword = PSWD + 5;
-bool interruptFlag = 0;
-bool interruptFlagDisp = 0;
+
 bool outputLatch = 0;
-bool alarmLatch = 0;
+bool outputLatchHist = 0;
+//bool alarmLatch = 0;
+bool isSound = 0;
 STRUCT_CONTROLLER_SP SetPoint;
 
 #define RELAY_LAT LATBbits.LATB3
-#define LED_LAT_3 LATCbits.LATC5
-#define LED_LAT_2 LATCbits.LATC6
-#define LED_LAT_1 LATCbits.LATC7
+#define LED_HI_LAT LATCbits.LATC7
+#define LED_NORMAL_LAT LATCbits.LATC6
+#define LED_LO_LAT LATCbits.LATC5
 
 #define RELAY_TRIS TRISBbits.TRISB3
-#define LED_TRIS_3 TRISCbits.TRISC5
-#define LED_TRIS_2 TRISCbits.TRISC6
-#define LED_TRIS_1 TRISCbits.TRISC7
+#define LED_HI_TRIS TRISCbits.TRISC7
+#define LED_NORMAL_TRIS TRISCbits.TRISC6
+#define LED_LO_TRIS TRISCbits.TRISC5
 
 #define _XTAL_FREQ 20000000
 
@@ -134,8 +132,6 @@ void __interrupt() INTERRUPT_InterruptManagerLow(void) {
         // clear the TMR0 interrupt flag
         INTCONbits.TMR0IF = 0;
     } else if (INTCONbits.INT0IE && INTCONbits.INT0IF) {
-        fpsCounter++;
-        interruptFlag = 1;
         INTCONbits.INT0IF = 0;
     }
 }
@@ -163,22 +159,23 @@ void initVariables(void) {
     if ((SetPoint.ucHiSetPoint < SET_POINT_HI_MIN) || (SetPoint.ucHiSetPoint > SET_POINT_HI_MAX)) {
         SetPoint.ucHiSetPoint = 100;
     }
-    if ((SetPoint.ucLoSetPoint < SET_POINT_HI_MIN) || (SetPoint.ucLoSetPoint > SET_POINT_HI_MAX)) {
-        SetPoint.ucLoSetPoint = 10;
+    if ((SetPoint.ucLoSetPoint < SET_POINT_LO_MIN) || (SetPoint.ucLoSetPoint > SET_POINT_LO_MAX)) {
+        SetPoint.ucLoSetPoint = SET_POINT_LO_MIN;
     }
-    if ((SetPoint.cMCh1 < M_MIN) || (SetPoint.cMCh1 > M_MAX)) {
+    if ((SetPoint.cMCh1 < -99) || (SetPoint.cMCh1 > 99)) {
         SetPoint.cMCh1 = 0;
     }
-    if ((SetPoint.cCCh1 < C_MIN) || (SetPoint.cCCh1 > C_MAX)) {
+    if ((SetPoint.cCCh1 < -99) || (SetPoint.cCCh1 > 99)) {
         SetPoint.cCCh1 = 0;
     }
 }
 
 void main(void) {
     SYSTEM_Initialize();
-    LED_TRIS_3 = 0;
-    LED_TRIS_2 = 0;
-    LED_TRIS_1 = 0;
+
+    LED_HI_TRIS = 0;
+    LED_NORMAL_TRIS = 0;
+    LED_LO_TRIS = 0;
     RELAY_TRIS = 0;
     RELAY_LAT = 0;
     INTERRUPT_GlobalInterruptEnable();
@@ -193,36 +190,32 @@ void main(void) {
         }
         if (tick250mSec) {
             tick250mSec = 0;
-            interruptFlagDisp = 0;
-            if (interruptFlag) {
-                interruptFlag = 0;
-                interruptFlagDisp = 1;
-            }
         }
 
-        if (interruptFlagDisp) {
-            statusByte1 |= 0x01;
-        }
-        if (outputLatch) {
-            RELAY_LAT = 1;
+        int iRoomTemp = (((long) iADCValCh1 + (long) SetPoint.cCCh1)*((long) ANALOG_FULLSCALE + (long) SetPoint.cMCh1 * 10)) / (long) 10230;
+        if (iRoomTemp < SetPoint.ucLoSetPoint) {
             statusByte1 |= 0x02;
+            outputLatch = 1;
+        } else if (iRoomTemp > SetPoint.ucHiSetPoint) {
+            statusByte1 |= 0x01;
+            outputLatch = 1;
         } else {
-            RELAY_LAT = 0;
+            statusByte1 |= 0x04;
+            outputLatch = 0;
         }
-//        if (alarmLatch) {
-//            
-//        } else {
-//            
-//        }
-        int iRoomTemp = (((long)iADCValCh1 + (long)SetPoint.cCCh1)*((long)ANALOG_FULLSCALE+(long)SetPoint.cMCh1))/(long)10230;
-        //        int iRoomTemp = ((long)iADCValCh1*(long)ANALOG_FULLSCALE)/(long)10230;
+        if (!outputLatchHist && outputLatch) {
+            isSound = 1;
+        }
+        outputLatchHist = outputLatch;
+
+
         switch (dispMainState) {
             case 0:
-                displayInt(iRoomTemp, 0);
+                displaySignedInt(iRoomTemp, 0);
                 if (keyDown & DNKEY_MASK) {
                     keyDown = 0x00;
                     keyHold = 0x00;
-                    outputLatch = 0;
+                    isSound = !isSound;
                 }
                 if (keyDown & PROKEY_MASK) {
                     keyDown = 0x00;
@@ -304,9 +297,13 @@ void main(void) {
                 statusByte0 |= 0x02;
                 switch (dispSubState) {
                     case 0:
-                        statusByte0 |= 0x04;
-                        checkAndInrDcrSignedChar(&SetPoint.cMCh1, M_MAX, M_MIN);
-                        displaySignedInt(SetPoint.cMCh1, 0);
+                        checkAndInrDcrSignedChar(&SetPoint.cMCh1, 99, -99);
+                        if (bToggleBitSlow) {
+                            statusByte0 |= 0x04;
+                            displaySignedInt(SetPoint.cMCh1, 0);
+                        } else {
+                            displaySignedInt(iRoomTemp, 0);
+                        }
                         if ((keyDown & ENTKEY_MASK)) {
                             keyDown = 0x00;
                             keyHold = 0x00;
@@ -314,9 +311,14 @@ void main(void) {
                         }
                         break;
                     case 1:
-                        statusByte0 |= 0x08;
-                        checkAndInrDcrSignedChar(&SetPoint.cCCh1, C_MAX, C_MIN);
-                        displaySignedInt(SetPoint.cCCh1, 0);
+                        checkAndInrDcrSignedChar(&SetPoint.cCCh1, 99, -99);
+                        if (bToggleBitSlow) {
+                            statusByte0 |= 0x08;
+                            displaySignedInt(SetPoint.cCCh1, 0);
+                        } else {
+                            displaySignedInt(iRoomTemp, 0);
+                        }
+
                         if ((keyDown & ENTKEY_MASK)) {
                             keyDown = 0x00;
                             keyHold = 0x00;
@@ -326,7 +328,7 @@ void main(void) {
                     default:
                         dispSubState = 0;
                         break;
-                        
+
                 }
                 if ((keyDown & PROKEY_MASK)) {
                     keyDown = 0x00;
@@ -340,20 +342,50 @@ void main(void) {
                 dispMainState = 0;
                 break;
         }
-//        if (statusByte0 & 0x01) {
-//            LED_LAT_1 = 0;
-//        } else {
-//            LED_LAT_1 = 1;
-//        }
-        if (statusByte1 & 0x01) {
-            LED_LAT_2 = 0;
+        //        if (statusByte0 & 0x01) {
+        //            LED_LAT_1 = 0;
+        //        } else {
+        //            LED_LAT_1 = 1;
+        //        }
+        if (statusByte1 & 0x04) {
+            LED_NORMAL_LAT = 1;
         } else {
-            LED_LAT_2 = 1;
+            LED_NORMAL_LAT = 0;
         }
-        if (statusByte1 & 0x02) {
-            LED_LAT_3 = 0;
+        bool shouldOn = 0;
+        if (statusByte1 & 0x01) {
+            if (bToggleBitSlow) {
+                shouldOn = 1;
+            }
+        }
+        if (shouldOn) {
+            LED_HI_LAT = 1;
         } else {
-            LED_LAT_3 = 1;
+            LED_HI_LAT = 0;
+        }
+        shouldOn = 0;
+        if (statusByte1 & 0x02) {
+            if (bToggleBitSlow) {
+                shouldOn = 1;
+            }
+        }
+        if (shouldOn) {
+            LED_LO_LAT = 1;
+        } else {
+            LED_LO_LAT = 0;
+        }
+        shouldOn = 0;
+        if (outputLatch) {
+            if (isSound) {
+                if (bToggleBitSlow) {
+                    shouldOn = 1;
+                }
+            }
+        }
+        if (shouldOn) {
+            RELAY_LAT = 1;
+        } else {
+            RELAY_LAT = 0;
         }
         statusByte0 |= statusByte0 << 4;
         directAssign(statusByte0, 3);

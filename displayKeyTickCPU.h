@@ -117,7 +117,7 @@ void displaySignedInt(int hexData, unsigned char dotPosition);
 void displayCharInPos(unsigned char hexData, unsigned char pos);
 #endif
 #ifdef CHECK_AND_INR_DCR_SIGNED_CHAR
-unsigned char checkAndInrDcrSignedChar(char *value, char upperLimit, char lowerLimit);
+unsigned char checkAndInrDcrSignedChar(signed char *value, signed char upperLimit, signed char lowerLimit);
 #endif
 #ifdef CHECK_AND_INR_DCR_CHAR
 unsigned char checkAndInrDcrChar(unsigned char *value, unsigned char upperLimit, unsigned char lowerLimit);

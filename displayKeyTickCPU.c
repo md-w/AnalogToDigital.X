@@ -342,7 +342,7 @@ void displaySignedInt(int hexData, unsigned char dotPosition) {
     } while (i <= 5);
 
     if (isNegative)
-        digitAssign(SEG_MINUS, i); // digitAssign(SEG_MINUS, i + 1);
+        digitAssign(SEG_MINUS, i+1); // digitAssign(SEG_MINUS, i + 1);
 
     if (dotPosition < MODULE_SIZE)
         directOrWithDisplay(0x80, dotPosition); // directOrWithDisplay(0x80,dotPosition);
@@ -394,7 +394,7 @@ unsigned char checkAndInrDcrChar(unsigned char *value, unsigned char upperLimit,
 #endif
 #ifdef CHECK_AND_INR_DCR_SIGNED_CHAR
 
-unsigned char checkAndInrDcrSignedChar(char *value, char upperLimit, char lowerLimit) {
+unsigned char checkAndInrDcrSignedChar(signed char *value, signed char upperLimit, signed char lowerLimit) {
     if ((keyDown & UPKEY_MASK) || (keyHold & UPKEY_MASK)) { // up key
         keyDown = 0x00;
         keyHold = 0x00;
